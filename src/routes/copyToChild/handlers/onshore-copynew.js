@@ -547,7 +547,7 @@ const logIt = ({ status, message, step, startedAt, folderId }) => {
   // Convert total seconds to HH:mm:ss format
   const responseTime = new Date(responseTimeMs).toISOString().substr(11, 8);
 
-  logger(`c2c-onshore-backlogs-${process.env.NODE_ENV.toLowerCase()}`, {
+  logger(`c2c-backlogs-${process.env.NODE_ENV.toLowerCase()}`, {
     status,
     message,
     step,

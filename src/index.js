@@ -64,7 +64,7 @@ fastify.addHook("onSend", function (request, reply, payload, done) {
 
 // Kafka Consumer
 kafkaConsumer(
-  `c2c-onshore-backlogs-${process.env.NODE_ENV.toLowerCase()}`,
+  `c2c-backlogs-${process.env.NODE_ENV.toLowerCase()}`,
   process.env.GROUP_ID
 ).catch(console.log);
 
