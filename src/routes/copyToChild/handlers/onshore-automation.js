@@ -15,13 +15,18 @@ export const OnshoreAutomation = (params, startedAt, fastify) => {
         return reject({ message: "Invalid auth token!" });
       }
 
-      const { spaceId } = params;
+      const { spaceId, statuses = ["Overwrite", "In Progress", "CopyNew"] } =
+        params;
 
-      const statuses = ["Overwrite", "In Progress", "CopyNew"];
       for (const status of statuses) {
+        if (!["Overwrite", "In Progress", "CopyNew"].includes(status)) {
+          continue;
+        }
+
         const folderData = await getFoldersBySpace(startedAt, spaceId, status);
 
         console.log(`Total '${status}' folders: ${folderData?.data?.length}`);
+
         for (const data of folderData?.data) {
           console.log(`Folder ${data?.id} started at ${new Date()}`);
 

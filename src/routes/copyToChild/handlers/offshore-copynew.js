@@ -237,25 +237,15 @@ const executeTaskOperation = (
           ?.map(async (task) => task.id)
       );
 
-      if (taskIds.length == 0) {
-        if (tasks?.nextPageToken) {
-          await executeTaskOperation(
-            startedAt,
-            folderId,
-            taskUpdateCustomFields,
-            tasks?.nextPageToken
-          );
+      if (taskIds.length == 0 && !tasks?.nextPageToken) {
+        logIt({
+          status: "Warn",
+          message: "No tasks found in the folder",
+          startedAt,
+          folderId,
+        });
 
-          return resolve();
-        } else {
-          logIt({
-            status: "Warn",
-            message: "No tasks found in the folder",
-            startedAt,
-            folderId,
-          });
-          return resolve();
-        }
+        return resolve();
       }
 
       if (taskIds.length > 0)
@@ -268,16 +258,13 @@ const executeTaskOperation = (
           folderId
         );
 
-      if (tasks?.nextPageToken) {
+      if (tasks?.nextPageToken)
         await executeTaskOperation(
           startedAt,
           folderId,
           taskUpdateCustomFields,
           tasks?.nextPageToken
         );
-
-        return resolve();
-      }
 
       resolve();
     } catch (error) {

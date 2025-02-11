@@ -5,6 +5,7 @@ export const OnshoreAutomationSchema = {
       required: ["spaceId"],
       properties: {
         spaceId: { type: "string" },
+        statuses: { type: "array" },
       },
     },
   },

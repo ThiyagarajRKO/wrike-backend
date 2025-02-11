@@ -170,7 +170,7 @@ export const Onshore = (params, startedAt, fastify) => {
         value: "Completed",
       });
 
-      await executeTaskOperation(
+      const updateStatus = await executeTaskOperation(
         startedAt,
         folderId,
         taskUpdateCustomFields
@@ -194,13 +194,14 @@ export const Onshore = (params, startedAt, fastify) => {
         ],
       }).catch(reject);
 
-      logIt({
-        status: "Info",
-        message: "",
-        step: "End",
-        folderId,
-        startedAt,
-      });
+      if (!updateStatus?.isEmpty)
+        logIt({
+          status: "Info",
+          message: "",
+          step: "End",
+          folderId,
+          startedAt,
+        });
 
       // Sending final response
       resolve({
@@ -424,27 +425,26 @@ const executeTaskOperation = (
           startedAt,
           folderId,
         });
-        return resolve();
+        return resolve({ isEmpty: true });
       }
 
-      await updateTask(
-        startedAt,
-        taskIds,
-        {
-          customFields: taskUpdateCustomFields,
-        },
-        folderId
-      );
+      if (taskIds.length > 0)
+        await updateTask(
+          startedAt,
+          taskIds,
+          {
+            customFields: taskUpdateCustomFields,
+          },
+          folderId
+        );
 
-      if (tasks?.nextPageToken) {
+      if (tasks?.nextPageToken)
         await executeTaskOperation(
           startedAt,
           folderId,
           taskUpdateCustomFields,
           tasks?.nextPageToken
         );
-        return resolve();
-      }
 
       resolve();
     } catch (error) {

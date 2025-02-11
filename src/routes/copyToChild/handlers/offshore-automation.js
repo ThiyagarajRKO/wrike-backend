@@ -15,23 +15,29 @@ export const OffshoreAutomation = (params, startedAt, fastify) => {
         return reject({ message: "Invalid auth token!" });
       }
 
-      const { spaceId } = params;
+      const { spaceId, statuses = ["Overwrite", "In Progress", "CopyNew"] } =
+        params;
 
-      const statuses = ["Overwrite", "In Progress", "CopyNew"];
+      if (!Array.isArray(statuses)) {
+        return reject({ message: "statuses key must be an array" });
+      }
 
       for (const status of statuses) {
+        if (!["Overwrite", "In Progress", "CopyNew"].includes(status)) {
+          continue;
+        }
+
         const folderData = await getFoldersBySpace(startedAt, spaceId, status);
 
         console.log(`Total '${status}' folders: ${folderData?.data?.length}`);
-        for (let i = 0; i < folderData?.data.length; i++) {
-          console.log(`Folder ${i + 1} started at ${new Date()}`);
 
-          const folderId = folderData?.data[i]["id"];
+        for (const data of folderData?.data) {
+          console.log(`Folder ${data?.id} started at ${new Date()}`);
 
           if (status == "Overwrite")
             await Offshore(
               {
-                folderId,
+                folderId: data?.id,
               },
               new Date(),
               fastify
@@ -39,7 +45,7 @@ export const OffshoreAutomation = (params, startedAt, fastify) => {
           else if (status == "CopyNew")
             await OffshoreCopynew(
               {
-                folderId,
+                folderId: data?.id,
               },
               new Date(),
               fastify

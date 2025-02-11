@@ -227,28 +227,33 @@ const executeTaskOperation = (
       const taskIds = await Promise.all(tasks?.data?.map((data) => data?.id));
 
       if (taskIds.length == 0 && !tasks?.nextPageToken) {
-        return resolve();
+        logIt({
+          status: "Warn",
+          message: "No tasks found in the folder",
+          startedAt,
+          folderId,
+        });
+
+        return resolve({ isEmpty: true });
       }
 
-      await updateTask(
-        startedAt,
-        taskIds,
-        {
-          customFields: taskUpdateCustomFields,
-        },
-        folderId
-      );
+      if (taskIds.length > 0)
+        await updateTask(
+          startedAt,
+          taskIds,
+          {
+            customFields: taskUpdateCustomFields,
+          },
+          folderId
+        );
 
-      if (tasks?.nextPageToken) {
+      if (tasks?.nextPageToken)
         await executeTaskOperation(
           startedAt,
           folderId,
           taskUpdateCustomFields,
           tasks?.nextPageToken
         );
-
-        return resolve();
-      }
 
       resolve();
     } catch (error) {
