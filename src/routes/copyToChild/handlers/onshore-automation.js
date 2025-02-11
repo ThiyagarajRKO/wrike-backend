@@ -30,7 +30,7 @@ export const OnshoreAutomation = (params, startedAt, fastify) => {
               {
                 folderId: data?.id,
               },
-              startedAt,
+              new Date(),
               fastify
             ).catch(console.log);
           else if (status == "CopyNew")
@@ -38,17 +38,9 @@ export const OnshoreAutomation = (params, startedAt, fastify) => {
               {
                 folderId: data?.id,
               },
-              startedAt,
+              new Date(),
               fastify
             ).catch(console.log);
-
-          logIt({
-            startedAt,
-            status: "Info",
-            message: "",
-            step: `Completed ${status} process`,
-            folderId: data?.id,
-          });
         }
       }
 

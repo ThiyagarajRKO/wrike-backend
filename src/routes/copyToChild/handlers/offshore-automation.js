@@ -33,7 +33,7 @@ export const OffshoreAutomation = (params, startedAt, fastify) => {
               {
                 folderId,
               },
-              startedAt,
+              new Date(),
               fastify
             ).catch(console.log);
           else if (status == "CopyNew")
@@ -41,17 +41,9 @@ export const OffshoreAutomation = (params, startedAt, fastify) => {
               {
                 folderId,
               },
-              startedAt,
+              new Date(),
               fastify
             ).catch(console.log);
-
-          logIt({
-            startedAt,
-            status: "Info",
-            message: "",
-            step: "Completed offshore process",
-            folderId,
-          });
         }
       }
 
