@@ -6,6 +6,7 @@ module.exports = {
     "Region*": "IEABCEFLJUAEGZFK",
     "Client*": "IEABCEFLJUAEF4AK",
     "Practice [GMS]": "IEABCEFLJUAEGZFO",
+    "WrikeXPI-State": "IEABCEFLJUAGPAMB",
   },
   live: {
     "CopyToChild*": "IEAC7PRTJUADKV3A",
@@ -14,5 +15,6 @@ module.exports = {
     "Region*": "IEAC7PRTJUAB432Y",
     "Client*": "IEAC7PRTJUAGPHMQ",
     "Practice [GMS]": "IEAC7PRTJUAB455U",
+    "WrikeXPI-State": "IEAC7PRTJUAGPA6B",
   },
 };

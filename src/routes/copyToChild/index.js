@@ -16,24 +16,9 @@ import { LogRequests } from "../../controllers";
 export const copyToChildRoute = (fastify, opts, done) => {
   fastify.post("/offshore", OffshoreSchema, async (req, reply) => {
     try {
-      const { method, url } = req;
+      const startedAt = new Date();
 
-      console.log("Started At :", new Date());
-
-      const logRequestData = await LogRequests.Insert({
-        action_name: "CopyToChild - Offshore",
-        method,
-        url,
-        statusCode: null,
-        source_ip: req.socket.remoteAddress,
-        user_agent: req.headers["user-agent"],
-        platform: req.headers["sec-ch-ua-platform"]?.replaceAll('"', ""),
-        is_active: true,
-      });
-
-      const result = await Offshore(req.body, logRequestData?.id, fastify);
-
-      console.log("Ended At :", new Date());
+      const result = await Offshore(req.body, startedAt, fastify);
 
       reply.code(result.statusCode || 200).send({
         success: true,

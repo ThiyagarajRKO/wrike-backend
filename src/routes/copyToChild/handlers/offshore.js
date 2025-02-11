@@ -1,5 +1,5 @@
 import { GetResponse } from "../../../utils/node-fetch";
-import { LogSteps } from "../../../controllers";
+import { produce as logger } from "../../../utils/kafka";
 import customFieldIdMeta from "../utils/customFieldsIds";
 import moment from "moment";
 
@@ -7,7 +7,7 @@ const WrikeEndpoint = process.env.WRIKE_ENDPOINT;
 const WrikeToken = process.env.WRIKE_TOKEN;
 const CustomFieldIds = customFieldIdMeta[process.env.NODE_ENV?.toLowerCase()];
 
-export const Offshore = (params, request_id, fastify) => {
+export const Offshore = (params, startedAt, fastify) => {
   return new Promise(async (resolve, reject) => {
     try {
       if (!WrikeToken) {
@@ -19,23 +19,13 @@ export const Offshore = (params, request_id, fastify) => {
 
       let taskUpdateCustomFields = [];
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Info",
-          error_message: "",
-          step_name: "Start",
-          input: params,
-          is_active: true,
-        });
+      const folderData = await getFolder(startedAt, folderId);
 
-      await updateFolder(request_id, folderId, {
+      await updateFolder(startedAt, folderId, {
         customFields: [
           { id: CustomFieldIds["CopyToChild*"], value: "In Progress" },
         ],
-      }).catch(console.log);
-
-      const folderData = await getFolder(request_id, folderId);
+      });
 
       let offshoreGlobalHub;
       // Filtering Offshore customfield value
@@ -58,25 +48,22 @@ export const Offshore = (params, request_id, fastify) => {
       );
 
       if (!offshoreGlobalHub) {
-        if (request_id)
-          LogSteps.Insert({
-            request_id,
-            log_type: "Warning",
-            error_message: "Offshore Global Hub custom field must not be empty",
-            step_name: "CustomField Validation",
-            input: {},
-            output: {},
-            is_active: true,
-          });
+        logIt({
+          startedAt,
+          status: "Warning",
+          message: "Offshore Global Hub custom field must not be empty",
+          step: "CustomField Validation",
+          folderId,
+        });
 
-        updateFolder(request_id, folderId, {
+        updateFolder(startedAt, folderId, {
           customFields: [
             { id: CustomFieldIds["CopyToChild*"], value: "Error" },
           ],
-        }).catch(console.log);
+        });
 
         sendComment(
-          request_id,
+          startedAt,
           folderId,
           "CopyToChild failed to run due to missing custom field <b>Offshore Global Hub</b>"
         );
@@ -86,27 +73,31 @@ export const Offshore = (params, request_id, fastify) => {
         });
       }
 
-      await executeTaskOperation(request_id, folderId, taskUpdateCustomFields);
+      taskUpdateCustomFields.push({
+        id: CustomFieldIds["WrikeXPI-State"],
+        value: "Completed",
+      });
 
-      await updateFolder(request_id, folderId, {
+      await executeTaskOperation(startedAt, folderId, taskUpdateCustomFields);
+
+      await updateFolder(startedAt, folderId, {
         customFields: [
           { id: CustomFieldIds["CopyToChild*"], value: "Completed" },
         ],
       }).catch(console.log);
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Info",
-          error_message: "",
-          step_name: "End",
-          output: {},
-          is_active: true,
-        });
+      logIt({
+        startedAt,
+        status: "Info",
+        message: "",
+        step: "End",
+        folderId,
+      });
 
       // Sending final response
       resolve({
-        message: "CopyToChild - Offshore process has been created successfully",
+        message:
+          "CopyToChild - Offshore overwrite process has been created successfully",
         data: {},
       });
     } catch (err) {
@@ -116,7 +107,7 @@ export const Offshore = (params, request_id, fastify) => {
   });
 };
 
-const getFolder = (request_id, folderId) => {
+const getFolder = (startedAt, folderId) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -129,19 +120,16 @@ const getFolder = (request_id, folderId) => {
         }
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: folderOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Get Folder",
-          input: { folderId },
-          output: folderOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (folderOutput?.errorDescription) {
+        logIt({
+          startedAt,
+          status: "Error",
+          message: folderOutput?.errorDescription,
+          step: "Get Folder",
+          folderId,
+        });
+
         return reject(folderOutput);
       }
 
@@ -152,7 +140,7 @@ const getFolder = (request_id, folderId) => {
   });
 };
 
-const updateFolder = (request_id, folderId, folderData) => {
+const updateFolder = (startedAt, folderId, folderData) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -166,19 +154,16 @@ const updateFolder = (request_id, folderId, folderData) => {
         folderData
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: folderOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Update Folder",
-          input: { folderId, folderData },
-          output: folderOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (folderOutput?.errorDescription) {
+        logIt({
+          startedAt,
+          status: "Error",
+          message: folderOutput?.errorDescription,
+          step: "Update Folder",
+          folderId,
+        });
+
         return reject(folderOutput);
       }
 
@@ -189,7 +174,7 @@ const updateFolder = (request_id, folderId, folderData) => {
   });
 };
 
-const sendComment = (request_id, folderId, comment) => {
+const sendComment = (startedAt, folderId, comment) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -202,21 +187,16 @@ const sendComment = (request_id, folderId, comment) => {
         }
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: commentOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Folder Comment",
-          input: {
-            text: comment,
-          },
-          output: commentOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (commentOutput?.errorDescription) {
+        logIt({
+          startedAt,
+          status: "Error",
+          message: commentOutput?.errorDescription,
+          step: "Folder Comment",
+          folderId,
+        });
+
         return reject(commentOutput);
       }
 
@@ -228,14 +208,14 @@ const sendComment = (request_id, folderId, comment) => {
 };
 
 const executeTaskOperation = (
-  request_id,
+  startedAt,
   folderId,
   taskUpdateCustomFields,
   taskTempToken
 ) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const tasks = await getTasks(request_id, folderId, taskTempToken);
+      const tasks = await getTasks(startedAt, folderId, taskTempToken);
 
       const taskIds = await Promise.all(tasks?.data?.map((data) => data?.id));
 
@@ -243,17 +223,24 @@ const executeTaskOperation = (
         return resolve();
       }
 
-      await updateTask(request_id, taskIds, {
-        customFields: taskUpdateCustomFields,
-      });
+      await updateTask(
+        startedAt,
+        taskIds,
+        {
+          customFields: taskUpdateCustomFields,
+        },
+        folderId
+      );
 
       if (tasks?.nextPageToken) {
         await executeTaskOperation(
-          request_id,
+          startedAt,
           folderId,
           taskUpdateCustomFields,
           tasks?.nextPageToken
         );
+
+        return resolve();
       }
 
       resolve();
@@ -263,7 +250,7 @@ const executeTaskOperation = (
   });
 };
 
-const getTasks = (request_id, folderId, taskTempToken) => {
+const getTasks = (startedAt, folderId, taskTempToken) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get the current date and time in UTC
@@ -293,19 +280,16 @@ const getTasks = (request_id, folderId, taskTempToken) => {
         }
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: taskOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Get Tasks",
-          input: {},
-          output: taskOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (taskOutput?.errorDescription) {
+        logIt({
+          startedAt,
+          status: "Error",
+          message: taskOutput?.errorDescription,
+          step: "Get Tasks",
+          folderId,
+        });
+
         return reject(taskOutput);
       }
 
@@ -316,7 +300,7 @@ const getTasks = (request_id, folderId, taskTempToken) => {
   });
 };
 
-const updateTask = (request_id, taskIds, taskData) => {
+const updateTask = (startedAt, taskIds, taskData, folderId) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -330,19 +314,16 @@ const updateTask = (request_id, taskIds, taskData) => {
         taskData
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: taskOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Update Task",
-          input: { taskIds, ...taskData },
-          output: {},
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (taskOutput?.errorDescription) {
+        logIt({
+          startedAt,
+          status: "Error",
+          message: taskOutput?.errorDescription,
+          step: "Update Task",
+          folderId,
+        });
+
         return reject(taskOutput);
       }
 
@@ -350,5 +331,31 @@ const updateTask = (request_id, taskIds, taskData) => {
     } catch (error) {
       reject(error);
     }
+  });
+};
+
+const logIt = ({ status, message, step, startedAt, folderId }) => {
+  const endedAt = new Date();
+  // Calculate response time in milliseconds
+  const responseTimeMs = endedAt - startedAt;
+
+  // Convert milliseconds to total seconds
+  const responseTimeInSeconds = responseTimeMs / 1000;
+
+  // Convert total seconds to HH:mm:ss format
+  const responseTime = new Date(responseTimeMs).toISOString().substr(11, 8);
+
+  logger(`c2c-onshore-backlogs-${process.env.NODE_ENV.toLowerCase()}`, {
+    status,
+    message,
+    step,
+    startedAt,
+    environment: process.env.NODE_ENV,
+    c2cType: "Offshore",
+    c2cExecution: "Overwrite",
+    endedAt,
+    responseTime,
+    responseTimeInSeconds,
+    folderId,
   });
 };
