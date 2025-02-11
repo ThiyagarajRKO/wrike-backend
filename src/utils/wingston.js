@@ -5,7 +5,7 @@ import dayjs from "dayjs"; // Lightweight alternative to moment
 // Function to create a logger instance based on environment and date
 const createLogger = (env) => {
   const currentDate = dayjs().format("YYYY-MM-DD"); // Format date as YYYY-MM-DD
-  const logFileName = `copytochild-log-${env}-${currentDate}.log`; // Log file includes date
+  const logFileName = `copytochild-${env}-${currentDate}.log`; // Log file includes date
   const logFilePath = path.join(__dirname, "../../logs", logFileName);
 
   return winston.createLogger({
