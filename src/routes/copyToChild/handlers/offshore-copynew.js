@@ -388,7 +388,7 @@ const logIt = ({ status, message, step, startedAt, folderId }) => {
     startedAt,
     environment: process.env.NODE_ENV,
     c2cType: "Offshore",
-    c2cExecution: "Overwrite",
+    c2cExecution: "CopyNew",
     endedAt,
     responseTime,
     responseTimeInSeconds,
