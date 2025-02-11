@@ -33,17 +33,17 @@ export const OffshoreAutomation = (params, startedAt, fastify) => {
               {
                 folderId,
               },
-              null,
+              startedAt,
               fastify
-            );
+            ).catch(console.log);
           else if (status == "CopyNew")
             await OffshoreCopynew(
               {
                 folderId,
               },
-              null,
+              startedAt,
               fastify
-            );
+            ).catch(console.log);
 
           logIt({
             startedAt,
@@ -62,13 +62,6 @@ export const OffshoreAutomation = (params, startedAt, fastify) => {
       });
     } catch (err) {
       console.log(err?.message || err);
-
-      logIt({
-        startedAt,
-        status: "Error",
-        message: err?.message,
-        step: "Automation Error",
-      });
 
       reject(err);
     }

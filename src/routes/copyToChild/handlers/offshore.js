@@ -57,7 +57,7 @@ export const Offshore = (params, startedAt, fastify) => {
       if (!offshoreGlobalHub) {
         logIt({
           startedAt,
-          status: "Warning",
+          status: "Warn",
           message: "Offshore Global Hub custom field must not be empty",
           step: "CustomField Validation",
           folderId,
