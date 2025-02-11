@@ -21,6 +21,13 @@ export const Offshore = (params, startedAt, fastify) => {
 
       const folderData = await getFolder(startedAt, folderId);
 
+      if (folderData?.data[0]?.project) {
+        return resolve({
+          message: "Offshore doesn't apply on project",
+          data: {},
+        });
+      }
+
       await updateFolder(startedAt, folderId, {
         customFields: [
           { id: CustomFieldIds["CopyToChild*"], value: "In Progress" },
