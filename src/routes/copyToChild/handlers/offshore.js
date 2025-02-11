@@ -265,26 +265,26 @@ const executeTaskOperation = (
 const getTasks = (startedAt, folderId, taskTempToken) => {
   return new Promise(async (resolve, reject) => {
     try {
-      // Get the current date and time in UTC
-      const currentDate = moment.utc();
-      // Calculate the date 4 months before
-      const dateBefore4Years = currentDate.clone().subtract(4, "months");
+      // // Get the current date and time in UTC
+      // const currentDate = moment.utc();
+      // // Calculate the date 4 months before
+      // const dateBefore4Years = currentDate.clone().subtract(4, "months");
 
-      // Format the dates
-      const formattedCurrentDate = currentDate.format("YYYY-MM-DDTHH:mm:ss[Z]");
-      const formattedDateBefore4Years = dateBefore4Years.format(
-        "YYYY-MM-DDTHH:mm:ss[Z]"
-      );
+      // // Format the dates
+      // const formattedCurrentDate = currentDate.format("YYYY-MM-DDTHH:mm:ss[Z]");
+      // const formattedDateBefore4Years = dateBefore4Years.format(
+      //   "YYYY-MM-DDTHH:mm:ss[Z]"
+      // );
 
-      // Manually construct the JSON string
-      const createdDate = JSON.stringify({
-        start: formattedDateBefore4Years,
-        end: formattedCurrentDate,
-      });
+      // // Manually construct the JSON string
+      // const createdDate = JSON.stringify({
+      //   start: formattedDateBefore4Years,
+      //   end: formattedCurrentDate,
+      // });
 
       // Get folder data
       const taskOutput = await GetResponse(
-        `${WrikeEndpoint}/folders/${folderId}/tasks?subTasks=true&pageSize=20&createdDate=${createdDate}&nextPageToken=${taskTempToken ?? ""}`,
+        `${WrikeEndpoint}/folders/${folderId}/tasks?subTasks=true&pageSize=20&nextPageToken=${taskTempToken ?? ""}`,
         "GET",
         {
           "content-type": "application/json",
