@@ -20,7 +20,7 @@ const CustomFieldRequired = [
   "Space Name*",
 ];
 
-export const Onshore = (params, startedAt, fastify) => {
+export const OnshoreCopynew = (params, startedAt, fastify) => {
   return new Promise(async (resolve, reject) => {
     try {
       if (!WrikeToken) {
@@ -83,7 +83,7 @@ export const Onshore = (params, startedAt, fastify) => {
       const customFieldData = await getCustomFields(startedAt);
 
       if (customFieldData?.data?.length == 0)
-        return reject({ message: "Custom Field Ids Empty" });
+        return reject({ message: "Customfield ids are Empty" });
 
       const { clientSpaceNameId, debtorSpaceNameId } =
         await findClientAndDebtorValue(
@@ -167,11 +167,7 @@ export const Onshore = (params, startedAt, fastify) => {
         value: folderCustomFieldsValues[debtorSpaceNameId[0]],
       });
 
-      await executeTaskOperation(
-        startedAt,
-        folderId,
-        taskUpdateCustomFields
-      ).catch(reject);
+      await executeTaskOperation(startedAt, folderId, taskUpdateCustomFields);
 
       await updateFolder(startedAt, folderId, {
         customFields: [
@@ -189,7 +185,7 @@ export const Onshore = (params, startedAt, fastify) => {
           },
           { id: CustomFieldIds["CopyToChild*"], value: "Completed" },
         ],
-      }).catch(reject);
+      });
 
       logIt({
         status: "Info",
@@ -205,7 +201,6 @@ export const Onshore = (params, startedAt, fastify) => {
         data: {},
       });
     } catch (err) {
-      console.log(err?.message || err);
       reject(err);
     }
   });
@@ -229,9 +224,7 @@ const setWarningStatus = (startedAt, folderId, message) => {
         startedAt,
       });
 
-      resolve({
-        message: message,
-      });
+      resolve({ message });
     } catch (err) {
       reject(err);
     }
@@ -411,22 +404,42 @@ const executeTaskOperation = (
     try {
       const tasks = await getTasks(startedAt, folderId, taskTempToken);
 
-      const taskIds = await Promise.all(tasks?.data?.map((data) => data?.id));
+      const taskIds = await Promise.all(
+        tasks?.data
+          ?.filter(
+            (task) =>
+              !task?.customFields?.some(
+                (field) =>
+                  field?.id === CustomFieldIds["WrikeXPI-State"] &&
+                  field?.value !== "Completed"
+              )
+          )
+          ?.map(async (task) => task.id)
+      );
 
-      if (taskIds.length == 0 && !tasks?.nextPageToken)
-        return logIt({
-          status: "Warn",
-          message: "No tasks found in the project",
-          startedAt,
-          folderId,
-        });
+      if (taskIds.length == 0) {
+        if (tasks?.nextPageToken)
+          return await executeTaskOperation(
+            startedAt,
+            folderId,
+            taskUpdateCustomFields,
+            tasks?.nextPageToken
+          );
+        else
+          return logIt({
+            status: "Warn",
+            message: "No tasks found in the project",
+            startedAt,
+            folderId,
+          });
+      }
 
       await updateTask(startedAt, taskIds, {
         customFields: taskUpdateCustomFields,
       });
 
       if (tasks?.nextPageToken) {
-        await executeTaskOperation(
+        return await executeTaskOperation(
           startedAt,
           folderId,
           taskUpdateCustomFields,
@@ -446,7 +459,7 @@ const getTasks = (startedAt, folderId, taskTempToken) => {
     try {
       // Get folder data
       const taskOutput = await GetResponse(
-        `${WrikeEndpoint}/folders/${folderId}/tasks?descendants=true&sortField=Title&sortOrder=Asc&subTasks=true&pageSize=20&nextPageToken=${taskTempToken ?? ""}`,
+        `${WrikeEndpoint}/folders/${folderId}/tasks?descendants=true&sortField=Title&sortOrder=Asc&subTasks=true&pageSize=20&nextPageToken=${taskTempToken ?? ""}&fields=[customfields]`,
         "GET",
         {
           "content-type": "application/json",
