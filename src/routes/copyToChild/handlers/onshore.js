@@ -1,7 +1,6 @@
 import { GetResponse } from "../../../utils/node-fetch";
-import { LogSteps } from "../../../controllers";
 import customFieldIdMeta from "../utils/customFieldsIds-onshore";
-import moment from "moment";
+import { produce as logger } from "../../../utils/kafka";
 
 const WrikeEndpoint = process.env.WRIKE_ENDPOINT;
 const WrikeToken = process.env.WRIKE_TOKEN;
@@ -21,7 +20,7 @@ const CustomFieldRequired = [
   "Space Name*",
 ];
 
-export const Onshore = (params, request_id, fastify) => {
+export const Onshore = (params, startedAt, fastify) => {
   return new Promise(async (resolve, reject) => {
     try {
       if (!WrikeToken) {
@@ -34,23 +33,13 @@ export const Onshore = (params, request_id, fastify) => {
       let taskUpdateCustomFields = [];
       let folderCustomFieldsValues = {};
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Info",
-          error_message: "",
-          step_name: "Start",
-          input: params,
-          is_active: true,
-        });
+      const folderData = await getFolder(startedAt, folderId);
 
-      await updateFolder(request_id, folderId, {
+      await updateFolder(startedAt, folderId, {
         customFields: [
           { id: CustomFieldIds["CopyToChild*"], value: "In Progress" },
         ],
       }).catch(console.log);
-
-      const folderData = await getFolder(request_id, folderId);
 
       let spaceName;
       // Filtering Onshore customfield value
@@ -79,8 +68,8 @@ export const Onshore = (params, request_id, fastify) => {
       );
 
       if (!spaceName)
-        return setErrorStatus(
-          request_id,
+        return setWarningStatus(
+          startedAt,
           folderId,
           "CopyToChild failed to run due to missing custom field <b>space name</b>"
         )
@@ -91,22 +80,21 @@ export const Onshore = (params, request_id, fastify) => {
       const clientCol = `Clients-${spaceNameArray[0]}-${spaceNameArray[1]}`;
       const debtorCol = `Debtors-${spaceNameArray[0]}-${spaceNameArray[1]}`;
 
-      const customFieldData = await getCustomFields(request_id);
+      const customFieldData = await getCustomFields(startedAt);
 
       if (customFieldData?.data?.length == 0)
         return reject({ message: "Custom Field Ids Empty" });
 
       const { clientSpaceNameId, debtorSpaceNameId } =
         await findClientAndDebtorValue(
-          request_id,
           customFieldData?.data,
           clientCol,
           debtorCol
         );
 
       if (!clientSpaceNameId || clientSpaceNameId?.length <= 0)
-        return setErrorStatus(
-          request_id,
+        return setWarningStatus(
+          startedAt,
           folderId,
           `CopyToChild failed to run due to missing custom field <b>${clientCol}</b> (for your market or agency)`
         )
@@ -114,8 +102,8 @@ export const Onshore = (params, request_id, fastify) => {
           .catch(reject);
 
       if (!debtorSpaceNameId || debtorSpaceNameId?.length <= 0)
-        return setErrorStatus(
-          request_id,
+        return setWarningStatus(
+          startedAt,
           folderId,
           `CopyToChild failed to run due to missing custom field <b>${debtorCol}</b> (for your market or agency)`
         )
@@ -123,8 +111,8 @@ export const Onshore = (params, request_id, fastify) => {
           .catch(reject);
 
       if (clientSpaceNameId?.length > 1)
-        return setErrorStatus(
-          request_id,
+        return setWarningStatus(
+          startedAt,
           folderId,
           `CopyToChild failed to run due to missing custom field <b>${clientCol}</b> (for your market or agency) present multiple times`
         )
@@ -132,8 +120,8 @@ export const Onshore = (params, request_id, fastify) => {
           .catch(reject);
 
       if (debtorSpaceNameId?.length > 1)
-        return setErrorStatus(
-          request_id,
+        return setWarningStatus(
+          startedAt,
           folderId,
           `CopyToChild failed to run due to missing custom field <b>${debtorCol}</b> (for your market or agency) present multiple times`
         )
@@ -162,12 +150,12 @@ export const Onshore = (params, request_id, fastify) => {
       });
 
       await executeTaskOperation(
-        request_id,
+        startedAt,
         folderId,
         taskUpdateCustomFields
       ).catch(reject);
 
-      await updateFolder(request_id, folderId, {
+      await updateFolder(startedAt, folderId, {
         customFields: [
           {
             id: CustomFieldIds["Campaign Name*"],
@@ -185,15 +173,13 @@ export const Onshore = (params, request_id, fastify) => {
         ],
       }).catch(reject);
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Info",
-          error_message: "",
-          step_name: "End",
-          output: {},
-          is_active: true,
-        });
+      logIt({
+        status: "Info",
+        message: "",
+        step: "End",
+        folderId,
+        startedAt,
+      });
 
       // Sending final response
       resolve({
@@ -207,30 +193,25 @@ export const Onshore = (params, request_id, fastify) => {
   });
 };
 
-const setErrorStatus = (request_id, folderId, error_message) => {
+const setWarningStatus = (startedAt, folderId, message) => {
   return new Promise((resolve, reject) => {
     try {
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Warning",
-          error_message: error_message,
-          step_name: "CustomField Validation",
-          input: {},
-          output: {},
-          is_active: true,
-        });
-
-      updateFolder(request_id, folderId, {
+      updateFolder(startedAt, folderId, {
         customFields: [{ id: CustomFieldIds["CopyToChild*"], value: "Error" }],
       }).catch(console.log);
 
-      sendComment(request_id, folderId, error_message);
+      if (process.env.NODE_ENV != "LIVE")
+        sendComment(startedAt, folderId, message);
 
-      console.log(folderId + ": " + error_message);
+      logIt({
+        status: "Warn",
+        message,
+        step: "CustomField Validation",
+        folderId,
+      });
 
       resolve({
-        message: error_message,
+        message: message,
       });
     } catch (err) {
       console.error(err?.message);
@@ -239,7 +220,7 @@ const setErrorStatus = (request_id, folderId, error_message) => {
   });
 };
 
-const getFolder = (request_id, folderId) => {
+const getFolder = (startedAt, folderId) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -252,19 +233,16 @@ const getFolder = (request_id, folderId) => {
         }
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: folderOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Get Folder",
-          input: { folderId },
-          output: folderOutput,
-          is_active: true,
+      if (folderOutput?.errorDescription) {
+        // Sending folder update error response
+        logIt({
+          status: "Error",
+          message: folderOutput?.errorDescription,
+          step: "Get Folder",
+          startedAt,
+          folderId,
         });
 
-      // Sending folder update error response
-      if (folderOutput?.errorDescription) {
         return reject(folderOutput);
       }
 
@@ -275,7 +253,7 @@ const getFolder = (request_id, folderId) => {
   });
 };
 
-const updateFolder = (request_id, folderId, folderData) => {
+const updateFolder = (startedAt, folderId, folderData) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -289,19 +267,16 @@ const updateFolder = (request_id, folderId, folderData) => {
         folderData
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: folderOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Update Folder",
-          input: { folderId, folderData },
-          output: folderOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (folderOutput?.errorDescription) {
+        logIt({
+          status: "Error",
+          message: folderOutput?.errorDescription,
+          step: "Update Folder",
+          folderId,
+          startedAt,
+        });
+
         return reject(folderOutput);
       }
 
@@ -312,7 +287,7 @@ const updateFolder = (request_id, folderId, folderData) => {
   });
 };
 
-const sendComment = (request_id, folderId, comment) => {
+const sendComment = (startedAt, folderId, comment) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -325,21 +300,16 @@ const sendComment = (request_id, folderId, comment) => {
         }
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: commentOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Folder Comment",
-          input: {
-            text: comment,
-          },
-          output: commentOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (commentOutput?.errorDescription) {
+        logIt({
+          status: "Error",
+          message: commentOutput?.errorDescription,
+          step: "Folder Comment",
+          folderId,
+          startedAt,
+        });
+
         return reject(commentOutput);
       }
 
@@ -350,7 +320,7 @@ const sendComment = (request_id, folderId, comment) => {
   });
 };
 
-const getCustomFields = (request_id) => {
+const getCustomFields = (startedAt) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -366,19 +336,16 @@ const getCustomFields = (request_id) => {
         );
       else customFieldOutput = OriginalCustomFieldData[process.env.NODE_ENV];
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: customFieldOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Get Custom Field",
-          input: {},
-          output: customFieldOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (customFieldOutput?.errorDescription) {
+        logIt({
+          status: "Error",
+          message: customFieldOutput?.errorDescription,
+          step: "Get Custom Field",
+          folderId,
+          startedAt,
+        });
+
         return reject(customFieldOutput);
       }
 
@@ -392,12 +359,7 @@ const getCustomFields = (request_id) => {
   });
 };
 
-const findClientAndDebtorValue = (
-  request_id,
-  customFieldData,
-  clientCol,
-  debtorCol
-) => {
+const findClientAndDebtorValue = (customFieldData, clientCol, debtorCol) => {
   return new Promise(async (resolve, reject) => {
     try {
       let debtorSpaceNameId = [],
@@ -414,17 +376,6 @@ const findClientAndDebtorValue = (
           return;
       });
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: customFieldOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Finding Client and Debtor value",
-          input: {},
-          output: { debtorSpaceNameId, clientSpaceNameId },
-          is_active: true,
-        });
-
       resolve({ debtorSpaceNameId, clientSpaceNameId });
     } catch (error) {
       reject(error);
@@ -433,33 +384,32 @@ const findClientAndDebtorValue = (
 };
 
 const executeTaskOperation = (
-  request_id,
+  startedAt,
   folderId,
   taskUpdateCustomFields,
   taskTempToken
 ) => {
   return new Promise(async (resolve, reject) => {
     try {
-      const tasks = await getTasks(request_id, folderId, taskTempToken);
+      const tasks = await getTasks(startedAt, folderId, taskTempToken);
 
       const taskIds = await Promise.all(tasks?.data?.map((data) => data?.id));
 
       if (taskIds.length == 0 && !tasks?.nextPageToken)
-        return setErrorStatus(
-          request_id,
+        return logIt({
+          status: "Warn",
+          message: "No tasks found in the project",
+          startedAt,
           folderId,
-          "No tasks found in the project"
-        )
-          .then(resolve)
-          .catch(reject);
+        });
 
-      await updateTask(request_id, taskIds, {
+      await updateTask(startedAt, taskIds, {
         customFields: taskUpdateCustomFields,
       });
 
       if (tasks?.nextPageToken) {
         await executeTaskOperation(
-          request_id,
+          startedAt,
           folderId,
           taskUpdateCustomFields,
           tasks?.nextPageToken
@@ -473,7 +423,7 @@ const executeTaskOperation = (
   });
 };
 
-const getTasks = (request_id, folderId, taskTempToken) => {
+const getTasks = (startedAt, folderId, taskTempToken) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -486,19 +436,15 @@ const getTasks = (request_id, folderId, taskTempToken) => {
         }
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: taskOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Get Tasks",
-          input: {},
-          output: taskOutput,
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (taskOutput?.errorDescription) {
+        logIt({
+          status: "Error",
+          message: taskOutput?.errorDescription,
+          step: "Get Tasks",
+          folderId,
+        });
+
         return reject(taskOutput);
       }
 
@@ -509,7 +455,7 @@ const getTasks = (request_id, folderId, taskTempToken) => {
   });
 };
 
-const updateTask = (request_id, taskIds, taskData) => {
+const updateTask = (startedAt, taskIds, taskData) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -523,19 +469,16 @@ const updateTask = (request_id, taskIds, taskData) => {
         taskData
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: taskOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Update Task",
-          input: { taskIds, ...taskData },
-          output: {},
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (taskOutput?.errorDescription) {
+        logIt({
+          status: "Error",
+          message: taskOutput?.errorDescription,
+          step: "Update Task",
+          folderId,
+          startedAt,
+        });
+
         return reject(taskOutput);
       }
 
@@ -543,5 +486,31 @@ const updateTask = (request_id, taskIds, taskData) => {
     } catch (error) {
       reject(error);
     }
+  });
+};
+
+const logIt = ({ status, message, step, startedAt, folderId }) => {
+  const endedAt = new Date();
+  // Calculate response time in milliseconds
+  const responseTimeMs = endedAt - startedAt;
+
+  // Convert milliseconds to total seconds
+  const responseTimeInSeconds = responseTimeMs / 1000;
+
+  // Convert total seconds to HH:mm:ss format
+  const responseTime = new Date(responseTimeMs).toISOString().substr(11, 8);
+
+  logger(`c2c-onshore-backlogs-${process.env.NODE_ENV.toLowerCase()}`, {
+    status,
+    message,
+    step,
+    startedAt,
+    environment: process.env.NODE_ENV,
+    c2cType: "Onshore",
+    c2cExecution: "CopyNew",
+    endedAt,
+    responseTime,
+    responseTimeInSeconds,
+    folderId,
   });
 };
