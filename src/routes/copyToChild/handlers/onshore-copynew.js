@@ -18,6 +18,7 @@ const CustomFieldRequired = [
   "CSSID*",
   "WrikeXPI-State",
   "Space Name*",
+  "Campaign Name*",
 ];
 
 export const OnshoreCopynew = (params, startedAt, fastify) => {
@@ -52,10 +53,7 @@ export const OnshoreCopynew = (params, startedAt, fastify) => {
           if (index > -1 && reqCFIndex > -1) {
             taskUpdateCustomFields.push({
               id: data["id"],
-              value:
-                data?.id == CustomFieldIds["WrikeXPI-State"]
-                  ? "Completed"
-                  : data["value"],
+              value: data["value"],
             });
           }
 
@@ -147,15 +145,15 @@ export const OnshoreCopynew = (params, startedAt, fastify) => {
           .catch(reject);
 
       // Inserting Client and Debtors space name
-      taskUpdateCustomFields.push({
-        id: clientSpaceNameId[0],
-        value: folderCustomFieldsValues[clientSpaceNameId[0]],
-      });
+      // taskUpdateCustomFields.push({
+      //   id: clientSpaceNameId[0],
+      //   value: folderCustomFieldsValues[clientSpaceNameId[0]],
+      // });
 
-      taskUpdateCustomFields.push({
-        id: debtorSpaceNameId[0],
-        value: folderCustomFieldsValues[debtorSpaceNameId[0]],
-      });
+      // taskUpdateCustomFields.push({
+      //   id: debtorSpaceNameId[0],
+      //   value: folderCustomFieldsValues[debtorSpaceNameId[0]],
+      // });
 
       taskUpdateCustomFields.push({
         id: CustomFieldIds["Client*"],
@@ -165,6 +163,11 @@ export const OnshoreCopynew = (params, startedAt, fastify) => {
       taskUpdateCustomFields.push({
         id: CustomFieldIds["Debtor*"],
         value: folderCustomFieldsValues[debtorSpaceNameId[0]],
+      });
+
+      taskUpdateCustomFields.push({
+        id: CustomFieldIds["WrikeXPI-State"],
+        value: "Completed",
       });
 
       await executeTaskOperation(startedAt, folderId, taskUpdateCustomFields);
@@ -197,7 +200,8 @@ export const OnshoreCopynew = (params, startedAt, fastify) => {
 
       // Sending final response
       resolve({
-        message: "CopyToChild - Onshore process has been created successfully",
+        message:
+          "CopyToChild - Onshore copynew process has been created successfully",
         data: {},
       });
     } catch (err) {
@@ -411,40 +415,51 @@ const executeTaskOperation = (
               !task?.customFields?.some(
                 (field) =>
                   field?.id === CustomFieldIds["WrikeXPI-State"] &&
-                  field?.value !== "Completed"
+                  field?.value === "Completed"
               )
           )
           ?.map(async (task) => task.id)
       );
 
       if (taskIds.length == 0) {
-        if (tasks?.nextPageToken)
-          return await executeTaskOperation(
+        if (tasks?.nextPageToken) {
+          await executeTaskOperation(
             startedAt,
             folderId,
             taskUpdateCustomFields,
             tasks?.nextPageToken
           );
-        else
-          return logIt({
+
+          return resolve();
+        } else {
+          logIt({
             status: "Warn",
             message: "No tasks found in the project",
             startedAt,
             folderId,
           });
+          return resolve();
+        }
       }
 
-      await updateTask(startedAt, taskIds, {
-        customFields: taskUpdateCustomFields,
-      });
+      if (taskIds.length > 0)
+        await updateTask(
+          startedAt,
+          taskIds,
+          {
+            customFields: taskUpdateCustomFields,
+          },
+          folderId
+        );
 
       if (tasks?.nextPageToken) {
-        return await executeTaskOperation(
+        await executeTaskOperation(
           startedAt,
           folderId,
           taskUpdateCustomFields,
           tasks?.nextPageToken
         );
+        return resolve();
       }
 
       resolve();
@@ -459,7 +474,7 @@ const getTasks = (startedAt, folderId, taskTempToken) => {
     try {
       // Get folder data
       const taskOutput = await GetResponse(
-        `${WrikeEndpoint}/folders/${folderId}/tasks?descendants=true&sortField=Title&sortOrder=Asc&subTasks=true&pageSize=20&nextPageToken=${taskTempToken ?? ""}&fields=[customfields]`,
+        `${WrikeEndpoint}/folders/${folderId}/tasks?descendants=true&sortField=Title&sortOrder=Asc&subTasks=true&pageSize=20&fields=[customFields]&nextPageToken=${taskTempToken ?? ""}`,
         "GET",
         {
           "content-type": "application/json",
@@ -487,7 +502,7 @@ const getTasks = (startedAt, folderId, taskTempToken) => {
   });
 };
 
-const updateTask = (startedAt, taskIds, taskData) => {
+const updateTask = (startedAt, taskIds, taskData, folderId) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data

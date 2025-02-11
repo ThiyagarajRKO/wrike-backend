@@ -18,6 +18,7 @@ const CustomFieldRequired = [
   "CSSID*",
   "WrikeXPI-State",
   "Space Name*",
+  "Campaign Name*",
 ];
 
 export const Onshore = (params, startedAt, fastify) => {
@@ -52,10 +53,7 @@ export const Onshore = (params, startedAt, fastify) => {
           if (index > -1 && reqCFIndex > -1) {
             taskUpdateCustomFields.push({
               id: data["id"],
-              value:
-                data?.id == CustomFieldIds["WrikeXPI-State"]
-                  ? "Completed"
-                  : data["value"],
+              value: data["value"],
             });
           }
 
@@ -147,15 +145,15 @@ export const Onshore = (params, startedAt, fastify) => {
           .catch(reject);
 
       // Inserting Client and Debtors space name
-      taskUpdateCustomFields.push({
-        id: clientSpaceNameId[0],
-        value: folderCustomFieldsValues[clientSpaceNameId[0]],
-      });
+      // taskUpdateCustomFields.push({
+      //   id: clientSpaceNameId[0],
+      //   value: folderCustomFieldsValues[clientSpaceNameId[0]],
+      // });
 
-      taskUpdateCustomFields.push({
-        id: debtorSpaceNameId[0],
-        value: folderCustomFieldsValues[debtorSpaceNameId[0]],
-      });
+      // taskUpdateCustomFields.push({
+      //   id: debtorSpaceNameId[0],
+      //   value: folderCustomFieldsValues[debtorSpaceNameId[0]],
+      // });
 
       taskUpdateCustomFields.push({
         id: CustomFieldIds["Client*"],
@@ -165,6 +163,11 @@ export const Onshore = (params, startedAt, fastify) => {
       taskUpdateCustomFields.push({
         id: CustomFieldIds["Debtor*"],
         value: folderCustomFieldsValues[debtorSpaceNameId[0]],
+      });
+
+      taskUpdateCustomFields.push({
+        id: CustomFieldIds["WrikeXPI-State"],
+        value: "Completed",
       });
 
       await executeTaskOperation(
@@ -201,7 +204,8 @@ export const Onshore = (params, startedAt, fastify) => {
 
       // Sending final response
       resolve({
-        message: "CopyToChild - Onshore process has been created successfully",
+        message:
+          "CopyToChild - Onshore overwrite process has been created successfully",
         data: {},
       });
     } catch (err) {
@@ -413,17 +417,24 @@ const executeTaskOperation = (
 
       const taskIds = await Promise.all(tasks?.data?.map((data) => data?.id));
 
-      if (taskIds.length == 0 && !tasks?.nextPageToken)
-        return logIt({
+      if (taskIds.length == 0 && !tasks?.nextPageToken) {
+        logIt({
           status: "Warn",
           message: "No tasks found in the project",
           startedAt,
           folderId,
         });
+        return resolve();
+      }
 
-      await updateTask(startedAt, taskIds, {
-        customFields: taskUpdateCustomFields,
-      });
+      await updateTask(
+        startedAt,
+        taskIds,
+        {
+          customFields: taskUpdateCustomFields,
+        },
+        folderId
+      );
 
       if (tasks?.nextPageToken) {
         await executeTaskOperation(
@@ -432,6 +443,7 @@ const executeTaskOperation = (
           taskUpdateCustomFields,
           tasks?.nextPageToken
         );
+        return resolve();
       }
 
       resolve();
@@ -474,7 +486,7 @@ const getTasks = (startedAt, folderId, taskTempToken) => {
   });
 };
 
-const updateTask = (startedAt, taskIds, taskData) => {
+const updateTask = (startedAt, taskIds, taskData, folderId) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
