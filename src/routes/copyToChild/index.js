@@ -13,8 +13,6 @@ import { OnshoreAutomationSchema } from "./schema/onshore-automation";
 import { OnshoreCopynewSchema } from "./schema/onshore-copynew";
 import { OffshoreCopynewSchema } from "./schema/offshore-copynew";
 
-import { LogRequests } from "../../controllers";
-
 export const copyToChildRoute = (fastify, opts, done) => {
   fastify.post("/offshore/overwrite", OffshoreSchema, async (req, reply) => {
     try {
@@ -101,28 +99,9 @@ export const copyToChildRoute = (fastify, opts, done) => {
     OffshoreAutomationSchema,
     async (req, reply) => {
       try {
-        const { method, url } = req;
+        const startedAt = new Date();
 
-        console.log("Started At :", new Date());
-
-        const logRequestData = await LogRequests.Insert({
-          action_name: "CopyToChild - Offshore - Automation",
-          method,
-          url,
-          statusCode: null,
-          source_ip: req.socket.remoteAddress,
-          user_agent: req.headers["user-agent"],
-          platform: req.headers["sec-ch-ua-platform"]?.replaceAll('"', ""),
-          is_active: true,
-        });
-
-        const result = await OffshoreAutomation(
-          req.body,
-          logRequestData?.id,
-          fastify
-        );
-
-        console.log("Ended At :", new Date());
+        const result = await OffshoreAutomation(req.body, startedAt, fastify);
 
         reply.code(result.statusCode || 200).send({
           success: true,
@@ -140,28 +119,9 @@ export const copyToChildRoute = (fastify, opts, done) => {
 
   fastify.post("/onshore/auto", OnshoreAutomationSchema, async (req, reply) => {
     try {
-      const { method, url } = req;
+      const startedAt = new Date();
 
-      console.log("Started At :", new Date());
-
-      const logRequestData = await LogRequests.Insert({
-        action_name: "CopyToChild - Onshore - Automation",
-        method,
-        url,
-        statusCode: null,
-        source_ip: req.socket.remoteAddress,
-        user_agent: req.headers["user-agent"],
-        platform: req.headers["sec-ch-ua-platform"]?.replaceAll('"', ""),
-        is_active: true,
-      });
-
-      const result = await OnshoreAutomation(
-        req.body,
-        logRequestData?.id,
-        fastify
-      );
-
-      console.log("Ended At :", new Date());
+      const result = await OnshoreAutomation(req.body, startedAt, fastify);
 
       reply.code(result.statusCode || 200).send({
         success: true,

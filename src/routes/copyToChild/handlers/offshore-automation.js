@@ -1,13 +1,14 @@
 import { GetResponse } from "../../../utils/node-fetch";
-import { LogSteps } from "../../../controllers";
+import { produce as logger } from "../../../utils/kafka";
 import customFieldIdMeta from "../utils/customFieldsIds";
 import { Offshore } from "./offshore";
+import { OffshoreCopynew } from "./offshore-copynew";
 
 const WrikeEndpoint = process.env.WRIKE_ENDPOINT;
 const WrikeToken = process.env.WRIKE_TOKEN;
 const CustomFieldIds = customFieldIdMeta[process.env.NODE_ENV?.toLowerCase()];
 
-export const OffshoreAutomation = (params, request_id, fastify) => {
+export const OffshoreAutomation = (params, startedAt, fastify) => {
   return new Promise(async (resolve, reject) => {
     try {
       if (!WrikeToken) {
@@ -16,82 +17,43 @@ export const OffshoreAutomation = (params, request_id, fastify) => {
 
       const { spaceId } = params;
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Info",
-          error_message: "",
-          step_name: "Automation Start",
-          input: params,
-          is_active: true,
-        });
+      const statuses = ["Overwrite", "In Progress", "CopyNew"];
 
-      const statuses = ["Overwrite", "In Progress"];
-      for (let j = 0; j < statuses.length; j++) {
-        if (request_id)
-          LogSteps.Insert({
-            request_id,
-            log_type: "Info",
-            error_message: "",
-            step_name: "Started " + statuses[j] + " process",
-            input: params,
-            is_active: true,
-          });
+      for (const status of statuses) {
+        const folderData = await getFoldersBySpace(startedAt, spaceId, status);
 
-        const folderData = await getFoldersBySpace(
-          request_id,
-          spaceId,
-          statuses[j]
-        );
-
-        console.log(
-          `Total '${statuses[j]}' folders: ${folderData?.data?.length}`
-        );
+        console.log(`Total '${status}' folders: ${folderData?.data?.length}`);
         for (let i = 0; i < folderData?.data.length; i++) {
           console.log(`Folder ${i + 1} started at ${new Date()}`);
-          if (request_id)
-            LogSteps.Insert({
-              request_id,
-              log_type: "Info",
-              error_message: "",
-              step_name: "Started offshore process",
-              input: {
-                customFieldId: CustomFieldIds["CopyToChild*"],
-                eventType: "FolderCustomFieldChanged",
-                value: "Overwrite",
-                folderId: folderData?.data[i]["id"],
+
+          const folderId = folderData?.data[i]["id"];
+
+          if (status == "Overwrite")
+            await Offshore(
+              {
+                folderId,
               },
-              is_active: true,
-            });
+              null,
+              fastify
+            );
+          else if (status == "CopyNew")
+            await OffshoreCopynew(
+              {
+                folderId,
+              },
+              null,
+              fastify
+            );
 
-          const offshoreOutput = await Offshore(
-            {
-              folderId: folderData?.data[i]["id"],
-            },
-            null,
-            fastify
-          );
-
-          if (request_id)
-            LogSteps.Insert({
-              request_id,
-              log_type: "Info",
-              error_message: "",
-              step_name: "Completed offshore process",
-              output: offshoreOutput,
-              is_active: true,
-            });
+          logIt({
+            startedAt,
+            status: "Info",
+            message: "",
+            step: "Completed offshore process",
+            folderId,
+          });
         }
       }
-
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Info",
-          error_message: "",
-          step_name: "Automation End",
-          is_active: true,
-        });
 
       // Sending final response
       resolve({
@@ -101,21 +63,19 @@ export const OffshoreAutomation = (params, request_id, fastify) => {
     } catch (err) {
       console.log(err?.message || err);
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: "Error",
-          error_message: err?.message,
-          step_name: "Automation Error",
-          is_active: true,
-        });
+      logIt({
+        startedAt,
+        status: "Error",
+        message: err?.message,
+        step: "Automation Error",
+      });
 
       reject(err);
     }
   });
 };
 
-const getFoldersBySpace = (request_id, spaceId, status) => {
+const getFoldersBySpace = (startedAt, spaceId, status) => {
   return new Promise(async (resolve, reject) => {
     try {
       // Get folder data
@@ -128,19 +88,16 @@ const getFoldersBySpace = (request_id, spaceId, status) => {
         }
       );
 
-      if (request_id)
-        LogSteps.Insert({
-          request_id,
-          log_type: folderOutput?.errorDescription ? "Error" : "Info",
-          error_message: "",
-          step_name: "Get Folder",
-          input: { spaceId, totalRows: folderOutput?.data?.length },
-          output: {},
-          is_active: true,
-        });
-
       // Sending folder update error response
       if (folderOutput?.errorDescription) {
+        logIt({
+          startedAt,
+          status: "Error",
+          message: folderOutput?.errorDescription,
+          step: "Get Folder",
+          spaceId,
+        });
+
         return reject(folderOutput);
       }
 
@@ -148,5 +105,33 @@ const getFoldersBySpace = (request_id, spaceId, status) => {
     } catch (error) {
       reject(error);
     }
+  });
+};
+
+const logIt = ({ status, message, step, startedAt, folderId, spaceId }) => {
+  const endedAt = new Date();
+  // Calculate response time in milliseconds
+  const responseTimeMs = endedAt - startedAt;
+
+  // Convert milliseconds to total seconds
+  const responseTimeInSeconds = responseTimeMs / 1000;
+
+  // Convert total seconds to HH:mm:ss format
+  const responseTime = new Date(responseTimeMs).toISOString().substr(11, 8);
+
+  logger(`c2c-backlogs-${process.env.NODE_ENV.toLowerCase()}`, {
+    status,
+    message,
+    step,
+    startedAt,
+    environment: process.env.NODE_ENV,
+    c2cType: "Onshore",
+    c2cExecution: "Overwrite",
+    isAutomation: true,
+    endedAt,
+    responseTime,
+    responseTimeInSeconds,
+    folderId,
+    spaceId,
   });
 };
