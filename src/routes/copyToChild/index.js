@@ -3,6 +3,7 @@ import { Onshore } from "./handlers/onshore";
 import { OffshoreAutomation } from "./handlers/offshore-automation";
 import { OnshoreAutomation } from "./handlers/onshore-automation";
 import { OnshoreCopynew } from "./handlers/onshore-copynew";
+import { OffshoreCopynew } from "./handlers/offshore-copynew";
 
 // Schema
 import { OffshoreSchema } from "./schema/offshore";
@@ -10,11 +11,12 @@ import { OnshoreSchema } from "./schema/onshore";
 import { OffshoreAutomationSchema } from "./schema/offshore-automation";
 import { OnshoreAutomationSchema } from "./schema/onshore-automation";
 import { OnshoreCopynewSchema } from "./schema/onshore-copynew";
+import { OffshoreCopynewSchema } from "./schema/offshore-copynew";
 
 import { LogRequests } from "../../controllers";
 
 export const copyToChildRoute = (fastify, opts, done) => {
-  fastify.post("/offshore", OffshoreSchema, async (req, reply) => {
+  fastify.post("/offshore/overwrite", OffshoreSchema, async (req, reply) => {
     try {
       const startedAt = new Date();
 
@@ -33,7 +35,30 @@ export const copyToChildRoute = (fastify, opts, done) => {
     }
   });
 
-  fastify.post("/onshore", OnshoreSchema, async (req, reply) => {
+  fastify.post(
+    "/offshore/copynew",
+    OffshoreCopynewSchema,
+    async (req, reply) => {
+      try {
+        const startedAt = new Date();
+
+        const result = await OffshoreCopynew(req.body, startedAt, fastify);
+
+        reply.code(result.statusCode || 200).send({
+          success: true,
+          message: result.message,
+          data: result?.data,
+        });
+      } catch (err) {
+        reply.code(err?.statusCode || 400).send({
+          success: false,
+          message: err?.message || err,
+        });
+      }
+    }
+  );
+
+  fastify.post("/onshore/overwrite", OnshoreSchema, async (req, reply) => {
     try {
       const startedAt = new Date();
 

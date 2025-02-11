@@ -420,7 +420,7 @@ const executeTaskOperation = (
       if (taskIds.length == 0 && !tasks?.nextPageToken) {
         logIt({
           status: "Warn",
-          message: "No tasks found in the project",
+          message: "No tasks found in the project/folder",
           startedAt,
           folderId,
         });

@@ -434,7 +434,7 @@ const executeTaskOperation = (
         } else {
           logIt({
             status: "Warn",
-            message: "No tasks found in the project",
+            message: "No tasks found in the project/folder",
             startedAt,
             folderId,
           });
