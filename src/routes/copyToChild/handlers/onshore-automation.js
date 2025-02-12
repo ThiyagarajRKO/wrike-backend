@@ -18,6 +18,8 @@ export const OnshoreAutomation = (params, startedAt, fastify) => {
       const { spaceId, statuses = ["Overwrite", "In Progress", "CopyNew"] } =
         params;
 
+      resolve({ message: "Processs is running..." });
+
       for (const status of statuses) {
         if (!["Overwrite", "In Progress", "CopyNew"].includes(status)) {
           continue;

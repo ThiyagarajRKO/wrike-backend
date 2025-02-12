@@ -22,6 +22,8 @@ export const OffshoreAutomation = (params, startedAt, fastify) => {
         return reject({ message: "statuses key must be an array" });
       }
 
+      resolve({ message: "Processs is running..." });
+
       for (const status of statuses) {
         if (!["Overwrite", "In Progress", "CopyNew"].includes(status)) {
           continue;
