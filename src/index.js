@@ -5,7 +5,6 @@ import AutoLoad from "@fastify/autoload";
 import path from "path";
 import Fastify from "fastify";
 import dotenv from "dotenv";
-import { consume as kafkaConsumer } from "./utils/kafka";
 
 dotenv.config();
 
@@ -61,12 +60,6 @@ fastify.addHook("onSend", function (request, reply, payload, done) {
     console.error(new Date().toISOString() + " : " + err?.message || err);
   }
 });
-
-// Kafka Consumer
-kafkaConsumer(
-  `c2c-backlogs-${process.env.NODE_ENV.toLowerCase()}`,
-  process.env.GROUP_ID
-).catch(console.log);
 
 // View Handlers
 fastify.get("/", (req, res) => {
